@@ -1,0 +1,16 @@
+{
+  "name": "almadina-stadium-tickets",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "3D ticket-booking demo for Al-Madina International Stadium (Al-Habibiya), Baghdad",
+  "author": "Yasser Omar",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node tests/logic.test.mjs"
+  },
+  "dependencies": { "three": "^0.160.0" },
+  "devDependencies": { "vite": "^5.4.0" }
+}
