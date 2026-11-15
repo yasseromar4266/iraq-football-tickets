@@ -40,8 +40,9 @@ for "My tickets". If `SUPABASE.url` in config.js is empty the app falls back to 
   redirect URI `https://gxpnwcggplbsjcfsldkh.supabase.co/auth/v1/callback`. The Google app is still in TESTING:
   only listed test users (now just the owner's Gmail, max 100) can sign in with Google. To open it to everyone,
   host the site publicly, add a privacy-policy page, fill homepage + privacy URLs on the Branding page, then
-  "Publish app". Supabase Site URL = http://localhost:5173; redirect allow-list = http://localhost:*/**, http://127.0.0.1:*/**.
-  Add the real domain to both when the site is hosted. `SUPABASE.google` in config.js shows/hides the button.
+  "Publish app". Supabase Site URL = https://yasseromar4266.github.io/iraq-football-tickets/; redirect allow-list =
+  http://localhost:*/**, http://127.0.0.1:*/**, https://yasseromar4266.github.io/iraq-football-tickets/**.
+  Google Branding has the home page, privacy URL (privacy.html) and authorized domain yasseromar4266.github.io. `SUPABASE.google` in config.js shows/hides the button.
 - `src/booking/account.js` — current fan; after sign-in replaces local orders with the server's (`syncOrders`),
   after sign-out clears them (`clearOrders`); the stadium then `store.reload()`s.
 - Client: `src/booking/remote.js` loads supabase-js from jsDelivr on first use (no npm package).
@@ -71,6 +72,12 @@ for "My tickets". If `SUPABASE.url` in config.js is empty the app falls back to 
 - Heavy things are lazy: no stadium is built until the user picks one; nothing renders while the menu is open.
 - Phones get a lighter setup (no shadows, lower pixel ratio, no backdrop blur). Keep it that way.
 - Palette: pitch green, chalk white, flag red, ink (see `:root` in `src/style.css`). No purple, no gradients on buttons.
+
+## Hosting
+
+Live site: https://yasseromar4266.github.io/iraq-football-tickets/ (GitHub Pages, branch `gh-pages`, root).
+`gh-pages` holds a static copy: `index.cdn.html` saved as `index.html`, `src/`, `logos/` (from public/logos),
+`privacy.html`, `.nojekyll`. After changing the source, rebuild that copy and push it to `gh-pages`.
 
 ## Known gaps (be honest about these)
 
