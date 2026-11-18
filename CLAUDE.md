@@ -75,6 +75,9 @@ for "My tickets". If `SUPABASE.url` in config.js is empty the app falls back to 
   on phones they stay as boxes. All stadium meshes cast and receive shadows (desktop).
 - Stands are stepped: one concrete tread + riser per row under the seats (from the tier's d0/dd/y0/dy), on top of
   a structural slab; glass balustrade + steel handrail along each tier front. Concrete uses `concreteTexture()`.
+  Aisle stairs at every block edge (two steps per row, yellow safety edges) and a scrolling LED ad ribbon on the
+  fascia of each upper tier (`stadium.update(time)` scrolls it). No vomitories: cutting them would change seat
+  indices, and bookings in the database are stored by seat index.
   Desktop seats are moulded (sloped pan, leaning backrest, pedestal); phones keep two boxes.
 - "Your view": picking a seat in a block shows a picture taken from that seat (`App.seatSnapshot`, rendered into
   the canvas and copied at once; cached per venue + light + seat). Tapping it flies to the seat.
