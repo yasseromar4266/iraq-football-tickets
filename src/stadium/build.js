@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { allSegFrames, pt, SEGS, frame, V } from './layout.js';
 import { QuadGeo, sweep, BeamBatch } from './geo.js';
-import { facadeTexture, roofTexture, solarTexture, glowTexture, windowsTexture, makeScoreboard } from './textures.js';
+import { facadeTexture, roofTexture, solarTexture, glowTexture, windowsTexture, makeScoreboard, concreteTexture } from './textures.js';
 
 const P = (f, d, y) => { const [x, z] = pt(f, d); return [x, y, z]; };
 
@@ -23,9 +23,29 @@ export function buildStadium(scene) {
   const lo = S.tiers[0], wallTop = lo.y0 - 0.35;
   addSweep([[0.4, 0], [0.4, wallTop]], wall);                      // pitch-side wall
   addSweep([[0.38, wallTop], [0.38, wallTop + 0.3]], band);        // coloured band on top of it
+  // stepped terraces: one tread + riser per row, exactly under the seats (a seat's floor is y0 + r·dy at d0 + r·dd)
+  const cTex = concreteTexture();
+  const tread = new THREE.MeshStandardMaterial({ map: cTex, color: 0xc9c7c0, roughness: 0.92, side: THREE.DoubleSide });
+  const riser = new THREE.MeshStandardMaterial({ map: cTex, color: 0x9d9b95, roughness: 0.95, side: THREE.DoubleSide });
+  const glass = new THREE.MeshStandardMaterial({ color: 0xbfd6dc, transparent: true, opacity: 0.28, roughness: 0.05, metalness: 0.1, side: THREE.DoubleSide, depthWrite: false });
+  const rail = new THREE.MeshStandardMaterial({ color: 0xd8dade, roughness: 0.35, metalness: 0.8 });
   S.tiers.forEach((t, i) => {
     const back = t.d0 + t.rows * t.dd, top = t.y0 + t.rows * t.dy;
-    addSweep([[t.d0 - (i ? 0.6 : 0.4), t.y0 - (i ? 0.6 : 0.3)], [back + 0.2, top - 0.25]], concrete);   // rake
+    addSweep([[t.d0 - (i ? 0.6 : 0.4), t.y0 - (i ? 0.6 : 0.3) - 0.2], [back + 0.2, top - 0.45]], concrete);   // structural slab underneath
+    const tg = new QuadGeo(), rg = new QuadGeo(), h = t.dd / 2;
+    coarse.forEach((fr) => {
+      sweep(rg, fr, t.d0 - h, t.y0 - 0.3, t.d0 - h, t.y0, 0.25, 0.3);                                     // first riser
+      for (let r = 0; r < t.rows; r++) {
+        const d = t.d0 + r * t.dd, y = t.y0 + r * t.dy;
+        sweep(tg, fr, d - h, y, d + h, y, 0.25, t.dd * 0.25);                                               // tread
+        sweep(rg, fr, d + h, y, d + h, y + t.dy, 0.25, t.dy * 0.25);                                        // riser
+      }
+    });
+    const tm = new THREE.Mesh(tg.build(), tread), rm = new THREE.Mesh(rg.build(), riser); group.add(tm, rm);
+    // glass balustrade with a steel handrail along the front of the tier
+    const gd = t.d0 - h - 0.15, gy = i ? t.y0 + 0.35 : wallTop + 0.3;
+    const gg = new QuadGeo(); coarse.forEach((fr) => sweep(gg, fr, gd, gy, gd, gy + 1.0)); const gm = new THREE.Mesh(gg.build(), glass); gm.renderOrder = 1; group.add(gm);
+    const hr = new QuadGeo(); coarse.forEach((fr) => { sweep(hr, fr, gd - 0.04, gy + 1.0, gd + 0.04, gy + 1.0); sweep(hr, fr, gd - 0.04, gy + 0.96, gd - 0.04, gy + 1.04); }); group.add(new THREE.Mesh(hr.build(), rail));
     const next = S.tiers[i + 1];
     if (next) {
       addSweep([[back + 0.2, top - 0.2], [S.back + 0.4, top - 0.2]], dark);                // concourse floor
@@ -133,7 +153,7 @@ export function buildStadium(scene) {
   });
 
   // every solid part casts and receives the sun's shadow (only used where shadows are on: desktop)
-  group.traverse((o) => { if (o.isMesh && !(o.material && o.material.isMeshBasicMaterial)) { o.castShadow = true; o.receiveShadow = true; } });
+  group.traverse((o) => { if (o.isMesh && !(o.material && o.material.isMeshBasicMaterial)) { o.castShadow = !o.material.transparent; o.receiveShadow = true; } });
   return { group, board, facade };
 }
 

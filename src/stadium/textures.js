@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 // Procedural canvas textures – no image files, nothing downloaded.
 import { canvas, texFrom } from './geo.js';
 
@@ -170,4 +171,14 @@ export function makeScoreboard() {
     tex.needsUpdate = true;
   };
   return { tex, draw };
+}
+
+/** Weathered concrete: fine grain, a few darker stains and form-work lines. Tiles. */
+export function concreteTexture() {
+  const [c, g] = canvas(256, 256); const r = rnd(11);
+  g.fillStyle = '#b9b7b0'; g.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 9000; i++) { const v = 150 + Math.floor(r() * 70); g.fillStyle = `rgba(${v},${v},${v - 4},${0.25 + r() * 0.3})`; g.fillRect(r() * 256, r() * 256, 1 + r() * 2, 1 + r() * 2); }
+  for (let i = 0; i < 14; i++) { const x = r() * 256, y = r() * 256, rad = 10 + r() * 40; const gr = g.createRadialGradient(x, y, 0, x, y, rad); gr.addColorStop(0, 'rgba(90,88,82,0.18)'); gr.addColorStop(1, 'rgba(90,88,82,0)'); g.fillStyle = gr; g.fillRect(x - rad, y - rad, rad * 2, rad * 2); }
+  g.fillStyle = 'rgba(70,70,66,0.25)'; g.fillRect(0, 0, 256, 2); g.fillRect(0, 0, 2, 256);
+  const t = texFrom(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
 }

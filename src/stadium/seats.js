@@ -24,7 +24,15 @@ export class Seats {
     this.group = new THREE.Group(); scene.add(this.group); scene = this.group;      // everything below is added to this group
     this.tones = V.tones.map((c) => new THREE.Color(c)); this.awayX = V.cx;
     const L = layout, N = L.count;
-    const geo = mergeBoxes([{ size: [0.46, 0.07, 0.42], pos: [0, 0.42, 0.02] }, { size: [0.46, 0.44, 0.07], pos: [0, 0.66, -0.2] }]);
+    // a moulded stadium seat on computers (sloped pan, backrest leaning back, pedestal); two boxes on phones
+    const geo = !shadows ? mergeBoxes([{ size: [0.46, 0.07, 0.42], pos: [0, 0.42, 0.02] }, { size: [0.46, 0.44, 0.07], pos: [0, 0.66, -0.2] }])
+      : mergeGeos([
+        new THREE.BoxGeometry(0.44, 0.05, 0.4).rotateX(-0.08).translate(0, 0.42, 0.03),                          // seat pan
+        new THREE.BoxGeometry(0.46, 0.04, 0.12).translate(0, 0.44, 0.22),                                        // rounded front lip
+        new THREE.BoxGeometry(0.44, 0.42, 0.05).rotateX(-0.2).translate(0, 0.67, -0.19),                         // backrest
+        new THREE.BoxGeometry(0.4, 0.06, 0.06).rotateX(-0.2).translate(0, 0.88, -0.23),                          // top of backrest
+        new THREE.BoxGeometry(0.07, 0.38, 0.07).translate(0, 0.2, -0.05),                                        // pedestal
+      ]);
     // moulded plastic: a little shine so the low sun and the sky show on the seat backs
     this.mesh = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.42, metalness: 0 }), N);
     this.mesh.receiveShadow = shadows;
