@@ -170,6 +170,11 @@ export class UI {
     $('legendToggle').textContent = this.t('legend');
   }
 
+  /** "Your view": a picture taken from the selected seat before the fan flies there. */
+  viewCard(i) {
+    const src = this.app.seatSnapshot(i);
+    return src ? `<button class="view-card" data-act="view" aria-label="${this.t('viewFromSeat')}"><img src="${src}" alt=""><span>${this.t('yourView')}</span></button>` : '';
+  }
   seatInfo(i) {
     const a = this.app, L = a.layout, b = L.blocks[L.block[i]], st = a.store.state(i);
     return `<div class="grid4"><div><small>${this.t('row')}</small><b>${L.row[i] + 1}</b></div><div><small>${this.t('seatNo')}</small><b>${L.num[i] + 1}</b></div>
@@ -191,11 +196,12 @@ export class UI {
       h = `<label class="pick"><small>${this.t('stadium')}</small><select name="venue">${vOpts}</select></label>
         <label class="pick"><small>${this.t('fixture')}</small><select name="fixture">${fOpts}</select></label>
         <div class="grid4 two"><div><small>${this.t('seats')}</small><b>${a.layout.count.toLocaleString('en-US')}</b></div><div><small>${this.t('availableSeats')}</small><b>${free.toLocaleString('en-US')}</b></div></div>
+        <div class="seg light"><small>${this.t('lighting')}</small><button data-act="light-golden" class="${a.atmo.mode === 'golden' ? 'on' : ''}">☀ ${this.t('afternoon')}</button><button data-act="light-night" class="${a.atmo.mode === 'night' ? 'on' : ''}">☾ ${this.t('nightMatch')}</button></div>
         <p class="hint">${this.t('hintStadium')}</p>`;
     } else if (a.view === 'block') {
       const b = a.activeBlock;
       h = `<h3>${esc(this.blockName(b))}</h3><p class="sub"><span class="sw" style="background:${CATEGORIES[b.cat].color}"></span>${esc(CATEGORIES[b.cat].name[lang])} · ${this.t('tier')} ${this.t(b.tier)}</p>`;
-      if (a.selectedSeat != null) h += this.seatInfo(a.selectedSeat) + `<div class="row"><button class="btn" data-act="view">${this.t('viewFromSeat')}</button>${this.seatButton(a.selectedSeat)}</div>`;
+      if (a.selectedSeat != null) h += this.viewCard(a.selectedSeat) + this.seatInfo(a.selectedSeat) + `<div class="row"><button class="btn" data-act="view">${this.t('viewFromSeat')}</button>${this.seatButton(a.selectedSeat)}</div>`;
       else h += `<div class="grid4 two"><div><small>${this.t('price')}</small><b>${this.money(a.store.blockPrice(b))}</b></div><div><small>${this.t('availableSeats')}</small><b>${a.store.availableIn(b)} / ${b.seatCount}</b></div></div><p class="hint">${this.t('hintBlock')}</p>`;
       h += `<button class="btn link" data-act="stadium">‹ ${this.t('back')}</button>`;
     } else {
@@ -209,6 +215,7 @@ export class UI {
   }
   panelClick(e) {
     const btn = e.target.closest('[data-act]'); if (!btn) return; const a = this.app, act = btn.dataset.act;
+    if (act === 'light-golden' || act === 'light-night') { a.atmo.setMode(act.slice(6)); this.renderPanel(); return; }
     if (act === 'stadium') a.goStadium(); else if (act === 'block') a.backToBlock(); else if (act === 'view') a.enterSeat(a.selectedSeat);
     else if (act === 'toggle') a.toggleSeat(a.view === 'seat' ? a.activeSeat : a.selectedSeat);
     else if (act.startsWith('seat')) a.stepSeat(act.endsWith('+1') ? 1 : -1); else if (act.startsWith('row')) a.stepRow(act.endsWith('+1') ? 1 : -1);

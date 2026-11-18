@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { VENUES } from './config.js';
 import { buildLayout } from './stadium/layout.js';
-import { buildStadium, buildLighting, buildSurroundings, disposeGroup } from './stadium/build.js';
+import { buildStadium, buildLighting, lightingFor, buildSurroundings, disposeGroup } from './stadium/build.js';
 import { buildPitch } from './stadium/pitch.js';
 import { Seats } from './stadium/seats.js';
 import { Match } from './stadium/match.js';
@@ -34,7 +34,7 @@ class App {
     this.rig.onClick = (x, y) => this.click(x, y); this.rig.onHover = (x, y) => this.hover(x, y);
     this.raycaster = new THREE.Raycaster(); this.ndc = new THREE.Vector2(); this.fwd = new THREE.Vector3();
 
-    buildLighting(this.scene); buildSurroundings(this.scene);       // the stadium itself is built only when the user picks one
+    this.atmo = buildLighting(this.scene, this.renderer, !this.mobile); buildSurroundings(this.scene);       // the stadium itself is built only when the user picks one
 
     this.account = new Account();
     this.ui = new UI(this);
@@ -72,7 +72,8 @@ class App {
       this.seats.refresh(); if (this.ui) this.ui.renderAll();
       const lost = this.store.takeLost(); if (lost && this.ui) this.ui.toast(this.t('seatLost'));
     });
-    this.stadium = buildStadium(this.scene); this.pitch = buildPitch(this.scene, v); this.seats = new Seats(this.scene, this.layout, this.store);
+    this.stadium = buildStadium(this.scene); this.pitch = buildPitch(this.scene, v); this.seats = new Seats(this.scene, this.layout, this.store, !this.mobile);
+    this.atmo.fit(v.cx + v.r0 + v.facade.d + 12); this.atmo.setMode(lightingFor(this.fixture));
     if (this.match) this.match.setFixture(this.fixture); else this.match = new Match(this.scene, this.fixture);
     this.view = 'stadium'; this.activeBlock = null; this.selectedSeat = null; this.activeSeat = null; this.hoverBlock = null; this.lastBoard = '';
     this.scale = (v.cx + v.r0 + v.facade.d) / 98.5;                 // camera distances relative to Al-Madina's size
@@ -97,7 +98,7 @@ class App {
   setFixture(id) {
     const fx = this.venue.fixtures.find((f) => f.id === id); if (!fx) return;
     this.fixture = fx; try { localStorage.setItem('almadina.fixture', id); } catch { /* ignore */ }
-    this.store.setFixture(fx); this.match.setFixture(fx); this.seats.rebuildCrowd(); this.lastBoard = '';
+    this.store.setFixture(fx); this.match.setFixture(fx); this.seats.rebuildCrowd(); this.lastBoard = ''; this.atmo.setMode(lightingFor(fx));
     this.selectedSeat = null; if (this.view === 'seat') this.backToBlock(); this.seats.refresh(); this.ui.renderAll();
   }
   afterReset() { this.seats.rebuildCrowd(); this.seats.refresh(); this.ui.renderAll(); }
@@ -163,6 +164,22 @@ class App {
     const dist = Math.hypot(eye.x, eye.z);
     this.rig.flyTo({ mode: 'look', eye, yaw: Math.atan2(-eye.x, -eye.z), pitch: Math.atan2(eye.y - 1, dist) * 0.9 }, quick ? 0.8 : 1.9, 62);
     this.ui.renderCrumbs(); this.ui.renderPanel();
+  }
+  /** A small picture of the view from seat i (taken once per seat, kept until the stadium or light changes). */
+  seatSnapshot(i) {
+    const key = `${this.venue.id}|${this.atmo.mode}|${i}`;
+    if (this.snapKey === key) return this.snapUrl;
+    const L = this.layout, cam = this.snapCam || (this.snapCam = new THREE.PerspectiveCamera(62, 16 / 9, 0.3, 3600));
+    const eye = new THREE.Vector3(L.x[i], L.y[i] + 1.2, L.z[i]);
+    cam.aspect = this.camera.aspect; cam.position.copy(eye); cam.lookAt(0, Math.max(0, eye.y * 0.1), 0); cam.updateProjectionMatrix();
+    const marker = this.seats.marker.visible; this.seats.marker.visible = false;
+    this.renderer.render(this.scene, cam);                              // drawn into the canvas, copied right away, then the next frame redraws
+    this.seats.marker.visible = marker;
+    const src = this.renderer.domElement, W = 480, H = 270, c = this.snapCanvas || (this.snapCanvas = document.createElement('canvas'));
+    c.width = W; c.height = H; const sw = src.width, sh = src.height, cw = Math.min(sw, sh * 16 / 9), ch = cw * 9 / 16;
+    try { c.getContext('2d').drawImage(src, (sw - cw) / 2, (sh - ch) / 2, cw, ch, 0, 0, W, H); this.snapUrl = c.toDataURL('image/jpeg', 0.82); }
+    catch { this.snapUrl = null; }
+    this.snapKey = key; return this.snapUrl;
   }
   free(i) { const s = this.store.state(i); return s === 'available' || s === 'basket' || s === 'mine'; }
   stepSeat(dir) {
