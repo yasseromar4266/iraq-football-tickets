@@ -203,7 +203,7 @@ class App {
   tick() {
     const dt = Math.min(0.1, this.clock.getDelta()), time = this.clock.elapsedTime; this.frame++;
     if (!this.venue || this.homeOpen) return;                        // nothing to draw behind the menu → keeps the menu smooth
-    this.rig.update(dt); this.match.update(dt, time); this.pitch.update(time);
+    this.rig.update(dt); this.match.update(dt, time); this.pitch.update(time); this.stadium.update(time);
     if (this.frame % 2 === 0) this.seats.updateFlags(time);
     const board = `${this.match.score.join('-')}|${this.match.clockText()}|${this.lang}|${this.fixture.id}`;
     if (board !== this.lastBoard) { this.lastBoard = board; this.stadium.board.draw(this.fixture, this.match.score, this.match.clockText(), this.lang); }

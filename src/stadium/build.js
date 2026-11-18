@@ -1,9 +1,9 @@
 // Stadium structure: tiers, walls, VIP boxes, roof + steel truss, tree columns, façade,
 // floodlights, screens, lighting and the surroundings. Generated per venue.
 import * as THREE from 'three';
-import { allSegFrames, pt, SEGS, frame, V } from './layout.js';
+import { allSegFrames, pt, SEGS, frame, segLen, V } from './layout.js';
 import { QuadGeo, sweep, BeamBatch } from './geo.js';
-import { facadeTexture, roofTexture, solarTexture, glowTexture, windowsTexture, makeScoreboard, concreteTexture } from './textures.js';
+import { facadeTexture, roofTexture, solarTexture, glowTexture, windowsTexture, makeScoreboard, concreteTexture, adTexture } from './textures.js';
 
 const P = (f, d, y) => { const [x, z] = pt(f, d); return [x, y, z]; };
 
@@ -24,7 +24,7 @@ export function buildStadium(scene) {
   addSweep([[0.4, 0], [0.4, wallTop]], wall);                      // pitch-side wall
   addSweep([[0.38, wallTop], [0.38, wallTop + 0.3]], band);        // coloured band on top of it
   // stepped terraces: one tread + riser per row, exactly under the seats (a seat's floor is y0 + r·dy at d0 + r·dd)
-  const cTex = concreteTexture();
+  const cTex = concreteTexture(), ribbons = [];
   const tread = new THREE.MeshStandardMaterial({ map: cTex, color: 0xc9c7c0, roughness: 0.92, side: THREE.DoubleSide });
   const riser = new THREE.MeshStandardMaterial({ map: cTex, color: 0x9d9b95, roughness: 0.95, side: THREE.DoubleSide });
   const glass = new THREE.MeshStandardMaterial({ color: 0xbfd6dc, transparent: true, opacity: 0.28, roughness: 0.05, metalness: 0.1, side: THREE.DoubleSide, depthWrite: false });
@@ -46,11 +46,36 @@ export function buildStadium(scene) {
     const gd = t.d0 - h - 0.15, gy = i ? t.y0 + 0.35 : wallTop + 0.3;
     const gg = new QuadGeo(); coarse.forEach((fr) => sweep(gg, fr, gd, gy, gd, gy + 1.0)); const gm = new THREE.Mesh(gg.build(), glass); gm.renderOrder = 1; group.add(gm);
     const hr = new QuadGeo(); coarse.forEach((fr) => { sweep(hr, fr, gd - 0.04, gy + 1.0, gd + 0.04, gy + 1.0); sweep(hr, fr, gd - 0.04, gy + 0.96, gd - 0.04, gy + 1.04); }); group.add(new THREE.Mesh(hr.build(), rail));
+
+    // aisle stairs at every block edge: two steps per row, each with a yellow safety edge
+    const sg = new QuadGeo(), ng = new QuadGeo(), dMid = t.d0 + (t.rows * t.dd) / 2;
+    SEGS.forEach((seg) => {
+      const nb = seg.kind === 'corner' ? Math.max(1, Math.round(segLen(seg, dMid) / 45)) : Math.max(1, Math.round(seg.len / 16));
+      const dt = (S.aisle * 0.85) / segLen(seg, dMid);
+      for (let k = 0; k < nb; k++) {
+        const tc = k / nb, fa = [frame(seg, Math.max(0, tc - (k ? dt : 0))), frame(seg, Math.min(1, tc + dt))];
+        if (!k) { const prevEnd = frame(seg, 0); fa[0] = prevEnd; }
+        for (let r = 0; r < t.rows; r++) {
+          const d = t.d0 + r * t.dd, y = t.y0 + r * t.dy, half = t.dy / 2;
+          sweep(sg, fa, d - h, y + 0.012, d, y + 0.012);                 // lower step
+          sweep(sg, fa, d, y, d, y + half);                              // its riser
+          sweep(sg, fa, d, y + half + 0.012, d + h, y + half + 0.012);   // upper step
+          sweep(ng, fa, d - h, y + 0.016, d - h + 0.07, y + 0.016);      // safety edges
+          sweep(ng, fa, d, y + half + 0.016, d + 0.07, y + half + 0.016);
+        }
+      }
+    });
+    group.add(new THREE.Mesh(sg.build(), new THREE.MeshStandardMaterial({ map: cTex, color: 0xd6d4ce, roughness: 0.9, side: THREE.DoubleSide })));
+    group.add(new THREE.Mesh(ng.build(), new THREE.MeshStandardMaterial({ color: 0xf0c419, roughness: 0.6, side: THREE.DoubleSide })));
     const next = S.tiers[i + 1];
     if (next) {
       addSweep([[back + 0.2, top - 0.2], [S.back + 0.4, top - 0.2]], dark);                // concourse floor
       addSweep([[back + 0.2, top - 0.2], [back + 0.2, top + 0.9]], wall);                  // rear parapet
       addSweep([[next.d0 - 0.6, next.y0 - 1.5], [next.d0 - 0.6, next.y0 + 0.35]], wall);   // fascia of the tier above
+      // LED advertising ribbon running round the front of the tier above
+      const rt = adTexture(); rt.wrapS = THREE.RepeatWrapping; ribbons.push(rt);
+      const rgeo = new QuadGeo(); coarse.forEach((fr) => sweep(rgeo, fr, next.d0 - 0.66, next.y0 - 1.35, next.d0 - 0.66, next.y0 + 0.05, 1 / 80, 1));
+      group.add(new THREE.Mesh(rgeo.build(), new THREE.MeshBasicMaterial({ map: rt, toneMapped: false, side: THREE.DoubleSide })));
       addSweep([[next.d0 - 0.6, next.y0 - 1.5], [S.back + 0.4, next.y0 - 1.5]], dark);     // soffit over concourse
     }
   });
@@ -154,7 +179,7 @@ export function buildStadium(scene) {
 
   // every solid part casts and receives the sun's shadow (only used where shadows are on: desktop)
   group.traverse((o) => { if (o.isMesh && !(o.material && o.material.isMeshBasicMaterial)) { o.castShadow = !o.material.transparent; o.receiveShadow = true; } });
-  return { group, board, facade };
+  return { group, board, facade, update(time) { ribbons.forEach((t) => { t.offset.x = -time * 0.01; }); } };
 }
 
 /** Free GPU memory of a group that is being replaced (venue switch). */
