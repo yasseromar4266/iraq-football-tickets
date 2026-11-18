@@ -132,6 +132,8 @@ export function buildStadium(scene) {
     if (!roofed(si)) { const post = new THREE.Mesh(new THREE.BoxGeometry(1, 6, 1), mat(0x55585e)); post.position.set(x + f.nx * 0.8, y - 4.5, z + f.nz * 0.8); group.add(post); }
   });
 
+  // every solid part casts and receives the sun's shadow (only used where shadows are on: desktop)
+  group.traverse((o) => { if (o.isMesh && !(o.material && o.material.isMeshBasicMaterial)) { o.castShadow = true; o.receiveShadow = true; } });
   return { group, board, facade };
 }
 
@@ -145,33 +147,112 @@ export function disposeGroup(scene, group) {
   });
 }
 
-export function buildLighting(scene) {
-  scene.background = new THREE.Color(0x070a14);
-  scene.fog = new THREE.FogExp2(0x0a0d18, 0.0011);
-  scene.add(new THREE.HemisphereLight(0xaab8e6, 0x2b2a22, 1.6));
+const SKY = {
+  // late-afternoon sun (kick-off before sunset): warm low sun from the west-south-west, soft blue sky, golden haze
+  golden: { top: 0x2a5fb0, horizon: 0xf4c592, ground: 0x5a4a3a, sun: 0xffc07a, sunGlow: 1, fog: 0xe9c29a, fogDensity: 0.00042, exposure: 1.0,
+    hemi: [0xb8cdf5, 0x6a5642, 0.55], light: [0xffcf98, 4.4], dir: [0.30, 0.47, 0.83] },
+  // night match under floodlights
+  night: { top: 0x03050d, horizon: 0x161c36, ground: 0x07070a, sun: 0x000000, sunGlow: 0, fog: 0x0a0d18, fogDensity: 0.0011, exposure: 1.05,
+    hemi: [0xaab8e6, 0x2b2a22, 1.6] },
+};
+
+function skyMaterial() {
+  return new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, fog: false, toneMapped: true,
+    uniforms: { top: { value: new THREE.Color() }, horizon: { value: new THREE.Color() }, ground: { value: new THREE.Color() },
+      sunColor: { value: new THREE.Color() }, sunDir: { value: new THREE.Vector3(0, 1, 0) } },
+    vertexShader: 'varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `uniform vec3 top; uniform vec3 horizon; uniform vec3 ground; uniform vec3 sunColor; uniform vec3 sunDir; varying vec3 vDir;
+      void main(){
+        vec3 d = normalize(vDir); float h = d.y;
+        vec3 col = h > 0.0 ? mix(horizon, top, pow(h, 0.42)) : mix(horizon, ground, pow(-h, 0.3));
+        float s = max(dot(d, normalize(sunDir)), 0.0);
+        col += sunColor * (pow(s, 900.0) * 6.0 + pow(s, 24.0) * 0.45 + pow(s, 4.0) * 0.18);
+        gl_FragColor = vec4(col, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+  });
+}
+
+/**
+ * Sky, sun / floodlights, fog and the reflection map. setMode('golden' | 'night') switches between an
+ * afternoon kick-off (low sun, long shadows over the stands) and a night match under floodlights.
+ */
+export function buildLighting(scene, renderer, shadows) {
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(3000, 48, 24), skyMaterial()); sky.renderOrder = -1; sky.frustumCulled = false; scene.add(sky);
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x000000, 1); scene.add(hemi);
+  scene.fog = new THREE.FogExp2(0x000000, 0.001);
+
+  // the sun
+  const sun = new THREE.DirectionalLight(0xffffff, 3); scene.add(sun, sun.target);
+  if (shadows) {
+    sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096); sun.shadow.bias = -0.0003; sun.shadow.normalBias = 0.06;
+  }
+  // floodlights for night matches
+  const floods = [];
   const mk = (x, z, i, shadow) => {
-    const l = new THREE.DirectionalLight(0xf3f6ff, i); l.position.set(x, 62, z); l.target.position.set(0, 0, 0);
-    scene.add(l, l.target);
-    if (shadow) {
+    const l = new THREE.DirectionalLight(0xf3f6ff, i); l.position.set(x, 62, z); l.target.position.set(0, 0, 0); scene.add(l, l.target); floods.push(l);
+    if (shadow && shadows) {
       l.castShadow = true; l.shadow.mapSize.set(2048, 2048);
       const c = l.shadow.camera; c.left = -62; c.right = 62; c.top = 44; c.bottom = -44; c.near = 10; c.far = 160; l.shadow.bias = -0.0006;
     }
-    return l;
   };
   mk(55, 48, 2.0, true); mk(-55, 48, 1.5); mk(55, -48, 1.5); mk(-55, -48, 1.5);
-  // stars
+  // stars (night only)
   const n = 500, p = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) { const a = Math.random() * 6.283, e = 0.12 + Math.random() * 1.3; p[i * 3] = Math.cos(a) * Math.cos(e) * 1800; p[i * 3 + 1] = Math.sin(e) * 1800; p[i * 3 + 2] = Math.sin(a) * Math.cos(e) * 1800; }
   const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.BufferAttribute(p, 3));
-  scene.add(new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xcfd8ff, size: 2.2, sizeAttenuation: false, fog: false, transparent: true, opacity: 0.7 })));
+  const stars = new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xcfd8ff, size: 2.2, sizeAttenuation: false, fog: false, transparent: true, opacity: 0.7 }));
+  scene.add(stars);
+
+  // reflection map made from the sky itself, one per mode, built once
+  const pmrem = new THREE.PMREMGenerator(renderer); const envs = {};
+  const envFor = (mode) => {
+    if (envs[mode]) return envs[mode];
+    const es = new THREE.Scene(); const m = skyMaterial(); m.uniforms = THREE.UniformsUtils.clone(sky.material.uniforms);
+    es.add(new THREE.Mesh(new THREE.SphereGeometry(100, 32, 16), m));
+    const gnd = new THREE.Mesh(new THREE.CircleGeometry(100, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: SKY[mode].ground })); gnd.position.y = -6; es.add(gnd);
+    envs[mode] = pmrem.fromScene(es, 0.04).texture; return envs[mode];
+  };
+
+  let extent = 130, mode = null;
+  const api = {
+    get mode() { return mode; },
+    /** Size of the area the sun's shadow must cover (metres from the centre). */
+    fit(r) {
+      extent = r; const c = sun.shadow.camera; c.left = -r; c.right = r; c.top = r; c.bottom = -r; c.near = 1; c.far = r * 6; c.updateProjectionMatrix();
+      if (mode) api.setMode(mode, true);
+    },
+    setMode(m, force) {
+      if (m === mode && !force) return; mode = m; const k = SKY[m];
+      const u = sky.material.uniforms; u.top.value.set(k.top); u.horizon.value.set(k.horizon); u.ground.value.set(k.ground);
+      u.sunColor.value.set(k.sun).multiplyScalar(k.sunGlow);
+      if (k.dir) u.sunDir.value.set(...k.dir).normalize();
+      scene.fog.color.set(k.fog); scene.fog.density = k.fogDensity; renderer.toneMappingExposure = k.exposure;
+      hemi.color.set(k.hemi[0]); hemi.groundColor.set(k.hemi[1]); hemi.intensity = k.hemi[2];
+      const day = m === 'golden';
+      sun.visible = day; floods.forEach((l) => { l.visible = !day; }); stars.visible = !day;
+      if (day) { const d = u.sunDir.value; sun.color.set(k.light[0]); sun.intensity = k.light[1]; sun.position.copy(d).multiplyScalar(extent * 3); sun.target.position.set(0, 0, 0); }
+      scene.environment = envFor(m); scene.background = null;
+    },
+  };
+  return api;
+}
+
+/** Afternoon kick-offs (before 17:30 Baghdad time) get the low sun; later ones are night matches. */
+export function lightingFor(fixture) {
+  const t = /T(\d\d):(\d\d)/.exec(fixture && fixture.date || '');
+  if (!t || fixture.tbd) return 'night';
+  return Number(t[1]) * 60 + Number(t[2]) < 17 * 60 + 30 ? 'golden' : 'night';
 }
 
 /** Generic Iraqi city surroundings: plaza, main road, parking, date palms, low-rise blocks, training pitch. */
 export function buildSurroundings(scene) {
   const g = new THREE.Group(); scene.add(g);
   const std = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.95, ...o });
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(2400, 2400).rotateX(-Math.PI / 2), std(0x2a261f)); ground.position.y = -0.05; g.add(ground);
-  const plaza = new THREE.Mesh(new THREE.PlaneGeometry(330, 250).rotateX(-Math.PI / 2), std(0x55524c)); plaza.position.y = -0.02; g.add(plaza);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(2400, 2400).rotateX(-Math.PI / 2), std(0x6b5b45)); ground.position.y = -0.05; ground.receiveShadow = true; g.add(ground);
+  const plaza = new THREE.Mesh(new THREE.PlaneGeometry(330, 250).rotateX(-Math.PI / 2), std(0x8a8478)); plaza.position.y = -0.02; plaza.receiveShadow = true; g.add(plaza);
   // Port Said Street on the west side, with a median
   const road = new THREE.Mesh(new THREE.PlaneGeometry(1600, 26).rotateX(-Math.PI / 2), std(0x1b1c20)); road.position.set(0, 0, 185); g.add(road);
   const median = new THREE.Mesh(new THREE.BoxGeometry(1600, 0.3, 2), std(0x6a6a66)); median.position.set(0, 0.1, 185); g.add(median);

@@ -64,6 +64,18 @@ for "My tickets". If `SUPABASE.url` in config.js is empty the app falls back to 
 - `public/logos/` — club logo files supplied by the owner; listed in `LOGO_FILES`.
 - `tests/logic.test.mjs` — run with `npm test`.
 
+## Look (realism)
+
+- `buildLighting(scene, renderer, shadows)` in `build.js` returns `{ mode, fit(r), setMode('golden'|'night') }`:
+  a sky-dome shader, the sun (4096 shadow map, desktop only) or four floodlights, fog, and a PMREM reflection map
+  made from the sky. `lightingFor(fixture)`: kick-off before 17:30 → 'golden' (afternoon), else 'night'.
+  The stadium panel has an Afternoon / Night switch. The sun comes from the west-south-west at ~28°, so the
+  roof shades about half of the pitch.
+- Seats are MeshStandard (slight shine) and receive shadows; on desktop fans are rounded figures (`mergeGeos`),
+  on phones they stay as boxes. All stadium meshes cast and receive shadows (desktop).
+- "Your view": picking a seat in a block shows a picture taken from that seat (`App.seatSnapshot`, rendered into
+  the canvas and copied at once; cached per venue + light + seat). Tapping it flies to the seat.
+
 ## Conventions
 
 - Arabic first, RTL. Every user-facing string goes through `i18n.js` (both `ar` and `en`).
@@ -87,8 +99,10 @@ Live site: https://yasseromar4266.github.io/iraq-football-tickets/ (GitHub Pages
 - No "forgot password" screen yet.
 - "Reset demo bookings" only clears this device's list; the seats stay booked in the database.
 
-- The 3D rendering was never checked visually by the author of this code beyond the owner confirming that
-  Al-Madina stadium rendered on his phone. The other 13 stadiums are untested in 3D.
+- Al-Madina was rendered and checked in headless Chrome (software WebGL) on 18 Nov 2026: overview, block view,
+  seat view, afternoon and night. The other 13 stadiums are still untested in 3D. To render without a GPU:
+  serve a copy whose import map points at a local three.module.js (r160) and drive `window.__app` with the
+  animation loop stopped (`renderer.setAnimationLoop(null)`, then `rig.update()` + `renderer.render()` per frame).
 - Only Al-Madina is modelled from photos. Other stadiums: capacity and bowl type are close to reality,
   seat colours / façades / roofs are estimates.
 - Venue assumptions: Al-Talaba at Al-Shaab, Al-Kahrabaa at Al-Zawraa Stadium, Ghaz Al-Shamal at Kirkuk,
