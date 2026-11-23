@@ -113,5 +113,10 @@ Live site: https://yasseromar4266.github.io/iraq-football-tickets/ (GitHub Pages
   seat colours / façades / roofs are estimates.
 - Venue assumptions: Al-Talaba at Al-Shaab, Al-Kahrabaa at Al-Zawraa Stadium, Ghaz Al-Shamal at Kirkuk,
   Iraq × Iran at Basra International.
-- The fixture list is a static snapshot; the page cannot fetch live data.
+- The fixture list is a static snapshot; the page cannot fetch live data. Finished matches hide themselves:
+  `matchOver(x)` in config.js = 2 h 15 min after kick-off, or the end of the day (Baghdad) when no time is set.
+  `MATCHES` / `venue.fixtures` hold only matches not over (checked at page load, and again when the menu renders);
+  `FIXTURES` keeps finished ones too so old tickets still show; `checkout` refuses a finished match ('over').
+  The database does not know kick-off times, so a hand-made request could still book a finished match.
+  When every match at a stadium is over, it falls back to its demo fixture; add new rounds to `ALL_MATCHES`.
 - Club logos need the clubs' / federation's permission before public use.

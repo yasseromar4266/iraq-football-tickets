@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { buildLayout, viewScore, blockOutline } from '../src/stadium/layout.js';
 import { Store, readAllOrders, syncOrders } from '../src/booking/store.js';
 import { Account } from '../src/booking/account.js';
-import { FIXTURES, VENUES, MATCHES, MAX_BASKET, FEES } from '../src/config.js';
+import { FIXTURES as ALL_FX, VENUES, MATCHES, WITH_VENUE, matchOver, MAX_BASKET, FEES } from '../src/config.js';
+const FIXTURES = ALL_FX.filter((f) => !matchOver(f));   // bookable fixtures (finished matches are hidden and cannot be booked)
 
 // every venue builds a sane seating model close to its real capacity
 const REAL = { madina: 30000, basra: 65227, shaab: 35700, karbala: 30000, najaf: 30000, minaa: 30000, erbil: 26500, maysan: 25000, zawraa: 15443, kirkuk: 25000, duhok: 20000, zakho: 20000, newroz: 14500, shorta: 10089 };
@@ -13,10 +14,16 @@ for (const v of VENUES) {
   for (let i = 0; i < l.count; i += 7) assert.ok(Number.isFinite(l.x[i] + l.y[i] + l.z[i]));
   console.log(v.id.padEnd(8), 'seats', l.count, 'blocks', l.blocks.length);
 }
-assert.equal(new Set(FIXTURES.map((f) => f.id)).size, FIXTURES.length);
+assert.equal(new Set(ALL_FX.map((f) => f.id)).size, ALL_FX.length);
 // fixtures: only matches whose stadium exists on the site; all upcoming at the snapshot date
-assert.equal(MATCHES.length, 35); assert.equal(MATCHES.filter((x) => x.group === 'nt').length, 1);
-MATCHES.forEach((x) => { assert.ok(new Date(x.date) > new Date('2026-11-14T00:00:00+03:00')); assert.ok(x.home && x.away && x.competition.ar); assert.ok(VENUES.some((v) => v.id === x.venue)); });
+assert.equal(WITH_VENUE.length, 35); assert.equal(WITH_VENUE.filter((x) => x.group === 'nt').length, 1);
+assert.ok(MATCHES.every((x) => !matchOver(x)), 'only matches that have not finished are listed');
+// finished-match rule: 2 h 15 min after kick-off, or end of the day when no time is announced
+const KO = { date: '2026-12-03T16:00:00+03:00', tbd: false }, TBD = { date: '2026-12-25T18:00:00+03:00', tbd: true };
+assert.equal(matchOver(KO, Date.parse('2026-12-03T18:14:00+03:00')), false); assert.equal(matchOver(KO, Date.parse('2026-12-03T18:16:00+03:00')), true);
+assert.equal(matchOver(TBD, Date.parse('2026-12-25T23:58:00+03:00')), false); assert.equal(matchOver(TBD, Date.parse('2026-12-26T00:01:00+03:00')), true);
+assert.equal(matchOver({ demo: true, date: '2020-01-01T00:00:00+03:00' }), false);
+WITH_VENUE.forEach((x) => { assert.ok(new Date(x.date) > new Date('2026-11-14T00:00:00+03:00')); assert.ok(x.home && x.away && x.competition.ar); assert.ok(VENUES.some((v) => v.id === x.venue)); });
 console.log('matches', MATCHES.length, 'with 3D booking', MATCHES.filter((x) => x.venue).length);
 const L = buildLayout(VENUES[0]);
 console.log('seats:', L.count, 'blocks:', L.blocks.length);

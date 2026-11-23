@@ -1,5 +1,5 @@
 // Booking state: sold seats (deterministic demo data), basket, confirmed orders, LocalStorage.
-import { CATEGORIES, FEES, MAX_BASKET } from '../config.js';
+import { CATEGORIES, FEES, MAX_BASKET, matchOver } from '../config.js';
 import { remoteEnabled, supabaseRemote } from './remote.js';
 
 const KEY = 'almadina.tickets.v1';
@@ -134,6 +134,7 @@ export class Store {
    */
   async checkout({ name, email, mobile, method }) {
     if (!this.fx.basket.length) return null;
+    if (matchOver(this.fixture)) return { error: 'over' };           // the page was left open past the final whistle
     const t = this.totals(), fx = this.fixture, seats = [...this.fx.basket];
     let ref, time = new Date().toISOString();
     if (this.remote) {

@@ -1,5 +1,5 @@
 // DOM interface: top bar, breadcrumbs, legend, minimap + compass, context panel, booking drawer, tickets.
-import { SUPABASE, CATEGORIES, CURRENCY, VENUES, MATCHES, FIXTURES, PAYMENT_METHODS, FEES, MAX_BASKET } from '../config.js';
+import { SUPABASE, CATEGORIES, CURRENCY, VENUES, MATCHES, FIXTURES, matchOver, PAYMENT_METHODS, FEES, MAX_BASKET } from '../config.js';
 import { STAND_NAMES, blockOutline, viewScore } from '../stadium/layout.js';
 import { seatHash, readAllOrders } from '../booking/store.js';
 
@@ -106,7 +106,7 @@ export class UI {
     const other = lang === 'ar' ? 'English' : 'العربية'; ['langBtn2', 'langBtn3'].forEach((id) => { $(id).textContent = other; });
     // entrance
     $('introKicker').textContent = this.t('introKicker'); $('introTitle').textContent = this.t('introTitle'); $('introSub').textContent = this.t('introSub'); $('enterBtn').textContent = this.t('enterSite');
-    const now = Date.now(), next = [...MATCHES].sort((x, y) => new Date(x.date) - new Date(y.date)).find((x) => new Date(x.date).getTime() > now - 3 * 3600e3) || MATCHES[0];
+    const now = Date.now(), next = MATCHES.filter((mt) => !matchOver(mt)).sort((x, y) => new Date(x.date) - new Date(y.date)).find((x) => new Date(x.date).getTime() > now - 3 * 3600e3) || MATCHES[0];
     const days = Math.round((new Date(next.date.slice(0, 10)) - new Date(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Baghdad' }))) / 864e5);
     const soon = days <= 0 ? this.t('today') : days === 1 ? this.t('tomorrow') : this.t('inDays').replace('{n}', days);
     const nc = this.clock(next);
@@ -117,7 +117,7 @@ export class UI {
     $('homeTabs').innerHTML = [['matches', this.t('matches')], ['venues', this.t('venues')], ['tickets', this.t('myTickets') + (nTickets ? ` (${nTickets})` : '')]].map(([k, label]) => `<button data-tab="${k}" class="${k === tab ? 'on' : ''}">${label}</button>`).join('');
     $('matchList').style.display = tab === 'matches' ? '' : 'none'; $('venueList').style.display = tab === 'venues' ? '' : 'none'; $('ticketList').style.display = tab === 'tickets' ? '' : 'none';
     this.renderTickets(orders);
-    const days2 = []; [...MATCHES].sort((x, y) => new Date(x.date) - new Date(y.date)).forEach((mt) => { const k = mt.date.slice(0, 10); let g = days2.find((x) => x.key === k); if (!g) { g = { key: k, items: [] }; days2.push(g); } g.items.push(mt); });
+    const days2 = []; MATCHES.filter((mt) => !matchOver(mt)).sort((x, y) => new Date(x.date) - new Date(y.date)).forEach((mt) => { const k = mt.date.slice(0, 10); let g = days2.find((x) => x.key === k); if (!g) { g = { key: k, items: [] }; days2.push(g); } g.items.push(mt); });
     $('matchList').innerHTML = days2.map((g) => `<section><h2>${this.dayLabel(g.items[0])}</h2>${g.items.map((mt) => this.fixtureRow(mt)).join('')}</section>`).join('');
     $('venueList').innerHTML = VENUES.map((v) => { const f = v.fixtures[0]; return `<button class="vcard" data-venue="${v.id}">
       <span class="vtones">${v.tones.slice(0, 3).map((c) => `<i style="background:${c}"></i>`).join('')}</span>
@@ -346,7 +346,8 @@ export class UI {
     this.app.store.checkout({ name: f.name.trim(), email: f.email.trim(), mobile: f.mobile.trim(), method: f.method })
       .then((res) => {
         this.submitting = false;
-        if (res && res.error === 'login') { this.renderDrawer(); }
+        if (res && res.error === 'over') { this.toast(this.t('matchOver')); this.renderDrawer(); }
+        else if (res && res.error === 'login') { this.renderDrawer(); }
         else if (res && res.error === 'limit') { this.toast(this.t('limitReached').replace('{n}', res.left)); this.drawerMode = 'basket'; this.renderDrawer(); }
         else if (res && res.error === 'taken') { this.toast(this.t('seatsTaken').replace('{n}', res.seats.length || 1)); this.drawerMode = 'basket'; this.renderDrawer(); }
         else if (res && res.error === 'network') { this.renderDrawer(); this.toast(this.t('netError')); }

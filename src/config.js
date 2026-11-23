@@ -241,8 +241,19 @@ const ALL_MATCHES = [
   m(18, '2026-12-25', null, 'zakho', 'duhok'),
   m(18, '2026-12-25', null, 'zawraa', 'karma'),
 ];
-// Only matches played in a stadium that exists on the site are shown.
-export const MATCHES = ALL_MATCHES.filter((x) => x.venue);
+/**
+ * A match is over 2 h 15 min after kick-off (90 min + half-time + stoppage + a margin).
+ * With no kick-off time announced yet, it counts as over when its day ends (Baghdad time).
+ */
+export const MATCH_LENGTH_MS = 135 * 60e3;
+export function matchOver(x, now = Date.now()) {
+  if (!x || x.demo) return false;
+  const end = x.tbd ? new Date(`${x.date.slice(0, 10)}T23:59:59+03:00`).getTime() : new Date(x.date).getTime() + MATCH_LENGTH_MS;
+  return now > end;
+}
+// Only matches played in a stadium that exists on the site, and not finished yet, are shown.
+export const WITH_VENUE = ALL_MATCHES.filter((x) => x.venue);   // finished ones included
+export const MATCHES = WITH_VENUE.filter((x) => !matchOver(x));
 VENUES.forEach((v) => {
   v.fixtures = MATCHES.filter((x) => x.venue === v.id);
   if (!v.fixtures.length) {   // no upcoming match here → one clearly-labelled demo fixture so the stadium can still be explored
@@ -250,7 +261,8 @@ VENUES.forEach((v) => {
       competition: { ar: 'مباراة تجريبية · لا توجد مباراة قادمة', en: 'Demo match · no upcoming fixture' } }];
   }
 });
-export const FIXTURES = VENUES.flatMap((v) => v.fixtures);
+// Every fixture the site knows, finished ones included, so "My tickets" can still show old tickets.
+export const FIXTURES = [...WITH_VENUE.filter((x) => matchOver(x)), ...VENUES.flatMap((v) => v.fixtures)];
 
 export const CATEGORIES = {
   vip:  { color: '#f0c14b', price: 75000, sold: 0.45, name: { ar: 'VIP · المنصة الرئيسية', en: 'VIP · Main Stand' } },
